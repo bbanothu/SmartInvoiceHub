@@ -161,7 +161,7 @@ export async function saveDocument({
       title,
       kind,
       content,
-      // userId,
+      userId,
       createdAt: new Date(),
     });
   } catch (error) {

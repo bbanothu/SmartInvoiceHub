@@ -1,43 +1,42 @@
 import type { Attachment } from 'ai';
+import { FileIcon, ImageIcon } from 'lucide-react';
+import Image from 'next/image';
 
-import { LoaderIcon } from './icons';
-
-export const PreviewAttachment = ({
+export function PreviewAttachment({
   attachment,
-  isUploading = false,
 }: {
   attachment: Attachment;
-  isUploading?: boolean;
-}) => {
-  const { name, url, contentType } = attachment;
+}) {
+  const isImage = attachment.contentType?.startsWith('image/');
+  const isPDF = attachment.contentType === 'application/pdf';
+  const fileName = attachment.name || 'Unnamed file';
+
+  if (isImage) {
+    return (
+      <div className="relative h-32 w-32 overflow-hidden rounded-lg">
+        <Image
+          src={attachment.url}
+          alt={fileName}
+          fill
+          className="object-cover"
+        />
+      </div>
+    );
+  }
+
+  if (isPDF) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border p-2">
+        <FileIcon className="h-6 w-6 text-red-500" />
+        <span className="text-sm">{fileName}</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="w-20 h-16 aspect-video bg-muted rounded-md relative flex flex-col items-center justify-center">
-        {contentType ? (
-          contentType.startsWith('image') ? (
-            // NOTE: it is recommended to use next/image for images
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={url}
-              src={url}
-              alt={name ?? 'An image attachment'}
-              className="rounded-md size-full object-cover"
-            />
-          ) : (
-            <div className="" />
-          )
-        ) : (
-          <div className="" />
-        )}
-
-        {isUploading && (
-          <div className="animate-spin absolute text-zinc-500">
-            <LoaderIcon />
-          </div>
-        )}
-      </div>
-      <div className="text-xs text-zinc-500 max-w-16 truncate">{name}</div>
+    <div className="flex items-center gap-2 rounded-lg border p-2">
+      <FileIcon className="h-6 w-6 text-gray-500" />
+      <span className="text-sm">{fileName}</span>
     </div>
   );
-};
+}

@@ -4,6 +4,11 @@ import {
   smoothStream,
   streamText,
 } from 'ai';
+import * as pdfjsLib from 'pdfjs-dist';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { readFile as fsReadFile } from 'fs/promises';
+import path from 'path';
 
 import { auth } from '@/app/(auth)/auth';
 import { myProvider } from '@/lib/ai/models';
@@ -26,6 +31,9 @@ import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
 
+// Initialize PDF.js worker with a local worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
@@ -46,6 +54,104 @@ export async function POST(request: Request) {
 
   if (!userMessage) {
     return new Response('No user message found', { status: 400 });
+  }
+
+  // Check if the message contains a file attachment
+  const fileMatch = userMessage.content.match(/\[FILE: (.*?)\]/);
+  if (fileMatch) {
+    const filePath = fileMatch[1];
+    console.log('Found file attachment:', filePath);
+    
+    try {
+      // Read the file from the public/uploads directory
+      const filePathFromRoot = path.join(process.cwd(), 'public', filePath);
+      console.log('Attempting to read file from:', filePathFromRoot);
+      
+      const dataBuffer = await readFile(filePathFromRoot);
+      console.log('File read successfully, buffer size:', dataBuffer.length);
+      
+      let data;
+      try {
+        console.log('Starting PDF parse...');
+        // Convert Buffer to Uint8Array properly
+        const uint8Array = new Uint8Array(dataBuffer.buffer);
+        
+        // Load the PDF document
+        const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+        const pdf = await loadingTask.promise;
+        
+        // Extract text from all pages
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => item.str)
+            .join(' ');
+          fullText += pageText + '\n';
+        }
+        
+        data = {
+          numpages: pdf.numPages,
+          text: fullText
+        };
+        
+        console.log('PDF parsed successfully:', {
+          pages: data.numpages,
+          textLength: data.text.length,
+          firstPageText: data.text.substring(0, 100) // First 100 chars for debugging
+        });
+      } catch (parseError: any) {
+        console.error('PDF Parse Error:', parseError);
+        console.error('Error type:', parseError.constructor.name);
+        console.error('Error message:', parseError.message);
+        console.error('Error stack:', parseError.stack);
+        throw parseError; // Re-throw to be caught by outer try-catch
+      }
+      
+      // Create a new message with the PDF content
+      const pdfMessage: Message = {
+        id: generateUUID(),
+        role: 'user',
+        content: `Please analyze this invoice and extract the following information in JSON format:
+        {
+          "invoice_number": "",
+          "date": "",
+          "due_date": "",
+          "total_amount": "",
+          "vendor": {
+            "name": "",
+            "address": "",
+            "tax_id": ""
+          },
+          "line_items": [
+            {
+              "description": "",
+              "quantity": "",
+              "unit_price": "",
+              "amount": ""
+            }
+          ],
+          "taxes": {
+            "subtotal": "",
+            "tax_rate": "",
+            "tax_amount": "",
+            "total": ""
+          }
+        }
+        
+        Here is the invoice content:
+        ${data.text}`,
+        createdAt: new Date(),
+      };
+      
+      // Replace the original message with the PDF message
+      messages[messages.length - 1] = pdfMessage;
+      console.log('PDF message created and added to messages array');
+    } catch (error) {
+      console.error('Error processing PDF:', error);
+      // Continue with the original message if PDF processing fails
+    }
   }
 
   const chat = await getChatById({ id });

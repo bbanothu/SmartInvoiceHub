@@ -1,5 +1,5 @@
 import { auth } from '@/app/(auth)/auth';
-import { getSuggestionsByDocumentId } from '@/lib/db/queries';
+import { getSuggestionsByDocumentId, getDocumentsById } from '@/lib/db/queries';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -11,23 +11,26 @@ export async function GET(request: Request) {
 
   const session = await auth();
 
-  if (!session || !session.user) {
+  if (!session || !session.user || !session.user.id) {
     return new Response('Unauthorized', { status: 401 });
   }
 
+  // First check if the user has access to the document
+  const documents = await getDocumentsById({ id: documentId });
+  const [document] = documents;
+
+  if (!document) {
+    return new Response('Document not found', { status: 404 });
+  }
+
+  if (document.userId !== session.user.id) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  // If user has access to document, get the suggestions
   const suggestions = await getSuggestionsByDocumentId({
     documentId,
   });
-
-  const [suggestion] = suggestions;
-
-  if (!suggestion) {
-    return Response.json([], { status: 200 });
-  }
-
-  if (suggestion.userId !== session.user.id) {
-    return new Response('Unauthorized', { status: 401 });
-  }
 
   return Response.json(suggestions, { status: 200 });
 }

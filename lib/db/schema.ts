@@ -5,6 +5,7 @@ import {
   blob,
   foreignKey,
   primaryKey,
+  real,
 } from 'drizzle-orm/sqlite-core';
 import type { InferSelectModel } from 'drizzle-orm';
 
@@ -63,6 +64,7 @@ export const document = sqliteTable(
       .notNull()
       .default('text')
       .$type<'text' | 'code' | 'image' | 'sheet'>(),
+    userId: text('userId').notNull(),
   },
   (table) => {
     return {
@@ -99,3 +101,47 @@ export const suggestion = sqliteTable(
 );
 
 export type Suggestion = InferSelectModel<typeof suggestion>;
+
+export const invoice = sqliteTable('Invoice', {
+  id: text('id').primaryKey().notNull(),
+  createdAt: integer('createdAt', { mode: 'timestamp' }).notNull(),
+  customerName: text('customerName').notNull(),
+  vendorName: text('vendorName').notNull(),
+  invoiceNumber: text('invoiceNumber').notNull(),
+  invoiceDate: integer('invoiceDate', { mode: 'timestamp' }).notNull(),
+  dueDate: integer('dueDate', { mode: 'timestamp' }).notNull(),
+  amount: real('amount').notNull(),
+  fileUrl: text('fileUrl').notNull(),
+  status: text('status')
+    .notNull()
+    .default('pending')
+    .$type<'pending' | 'processed' | 'error'>(),
+});
+
+export type Invoice = InferSelectModel<typeof invoice>;
+
+export const lineItem = sqliteTable('LineItem', {
+  id: text('id').primaryKey().notNull(),
+  invoiceId: text('invoiceId')
+    .notNull()
+    .references(() => invoice.id),
+  description: text('description').notNull(),
+  quantity: real('quantity').notNull(),
+  unitPrice: real('unitPrice').notNull(),
+  total: real('total').notNull(),
+});
+
+export type LineItem = InferSelectModel<typeof lineItem>;
+
+export const tokenUsage = sqliteTable('TokenUsage', {
+  id: text('id').primaryKey().notNull(),
+  invoiceId: text('invoiceId')
+    .notNull()
+    .references(() => invoice.id),
+  inputTokens: integer('inputTokens').notNull(),
+  outputTokens: integer('outputTokens').notNull(),
+  cost: real('cost').notNull(),
+  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+});
+
+export type TokenUsage = InferSelectModel<typeof tokenUsage>;

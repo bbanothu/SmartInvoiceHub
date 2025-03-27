@@ -10,7 +10,7 @@ import {
 } from 'react';
 import type { BlockKind, UIBlock } from './block';
 import { FileIcon, FullscreenIcon, ImageIcon, LoaderIcon } from './icons';
-import { cn, fetcher } from '@/lib/utils';
+import { cn, fetcher, generateUUID } from '@/lib/utils';
 import type { Document } from '@/lib/db/schema';
 import { InlineDocumentSkeleton } from './document-skeleton';
 import useSWR from 'swr';
@@ -93,7 +93,7 @@ export function DocumentPreview({
           content: block.content,
           id: block.documentId,
           createdAt: new Date(),
-          userId: 'noop',
+          userId: generateUUID(),
         }
       : null;
 

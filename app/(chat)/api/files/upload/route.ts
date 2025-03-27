@@ -1,18 +1,23 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/app/(auth)/auth';
+import { writeFile } from 'fs/promises';
+import { join } from 'path';
+import { generateUUID } from '@/lib/utils';
 
 // Use Blob instead of File since File is not available in Node.js environment
 const FileSchema = z.object({
   file: z
     .instanceof(Blob)
-    .refine((file) => file.size <= 5 * 1024 * 1024, {
-      message: 'File size should be less than 5MB',
+    .refine((file) => file.size <= 10 * 1024 * 1024, {
+      message: 'File size should be less than 10MB',
     })
-    // Update the file type based on the kind of files you want to accept
-    .refine((file) => ['image/jpeg', 'image/png'].includes(file.type), {
-      message: 'File type should be JPEG or PNG',
-    }),
+    .refine(
+      (file) => ['image/jpeg', 'image/png', 'application/pdf'].includes(file.type),
+      {
+        message: 'File type should be JPEG, PNG, or PDF',
+      },
+    ),
 });
 
 export async function POST(request: Request) {
@@ -45,29 +50,30 @@ export async function POST(request: Request) {
     }
 
     // Get filename from formData since Blob doesn't have name property
-    const filename = (formData.get('file') as File).name;
+    const originalFilename = (formData.get('file') as File).name;
+    const fileExtension = originalFilename.split('.').pop()?.toLowerCase() || '';
+    const uniqueFilename = `${generateUUID()}.${fileExtension}`;
+    
     const fileBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(fileBuffer);
 
-    try {
-      // Generate unique filename with timestamp
-      const timestamp = Date.now();
-      const uniqueFilename = `${timestamp}-${filename}`;
+    // Save file to public/uploads
+    const uploadDir = join(process.cwd(), 'public', 'uploads');
+    const filePath = join(uploadDir, uniqueFilename);
+    await writeFile(filePath, buffer);
 
-      // Create data URL for immediate preview
-      const dataURL = `data:${file.type};base64,${buffer.toString('base64')}`;
+    // Return the file path relative to public directory
+    const publicPath = `/uploads/${uniqueFilename}`;
 
-      return NextResponse.json({
-        url: dataURL,
-        pathname: `/uploads/${uniqueFilename}`,
-        contentType: file.type,
-      });
-    } catch (error) {
-      return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
-    }
+    return NextResponse.json({
+      url: publicPath,
+      pathname: uniqueFilename,
+      contentType: file.type,
+    });
   } catch (error) {
+    console.error('Error uploading file:', error);
     return NextResponse.json(
-      { error: 'Failed to process request' },
+      { error: 'Failed to upload file' },
       { status: 500 },
     );
   }

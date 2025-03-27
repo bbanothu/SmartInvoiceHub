@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   const session = await auth();
 
-  if (!session || !session.user) {
+  if (!session || !session.user || !session.user.id) {
     return new Response('Unauthorized', { status: 401 });
   }
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
   const session = await auth();
 
-  if (!session) {
+  if (!session || !session.user || !session.user.id) {
     return new Response('Unauthorized', { status: 401 });
   }
 
@@ -55,18 +55,15 @@ export async function POST(request: Request) {
     kind,
   }: { content: string; title: string; kind: BlockKind } = await request.json();
 
-  if (session.user?.id) {
-    const document = await saveDocument({
-      id,
-      content,
-      title,
-      kind,
-      userId: session.user.id,
-    });
+  const document = await saveDocument({
+    id,
+    content,
+    title,
+    kind,
+    userId: session.user.id,
+  });
 
-    return Response.json(document, { status: 200 });
-  }
-  return new Response('Unauthorized', { status: 401 });
+  return Response.json(document, { status: 200 });
 }
 
 export async function PATCH(request: Request) {
@@ -81,7 +78,7 @@ export async function PATCH(request: Request) {
 
   const session = await auth();
 
-  if (!session || !session.user) {
+  if (!session || !session.user || !session.user.id) {
     return new Response('Unauthorized', { status: 401 });
   }
 

@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { useLocalStorage, useWindowSize } from 'usehooks-ts';
 
-import { sanitizeUIMessages } from '@/lib/utils';
+import { sanitizeUIMessages, generateUUID } from '@/lib/utils';
 
 import { ArrowUpIcon, PaperclipIcon, StopIcon } from './icons';
 import { PreviewAttachment } from './preview-attachment';
@@ -120,10 +120,26 @@ function PureMultimodalInput({
   const submitForm = useCallback(() => {
     window.history.replaceState({}, '', `/chat/${chatId}`);
 
-    handleSubmit(undefined, {
-      experimental_attachments: attachments,
-    });
+    // If there are attachments, append their URLs to the input text
+    let messageText = input;
+    if (attachments.length > 0) {
+      const fileUrls = attachments.map(attachment => `[FILE: ${attachment.url}]`).join('\n');
+      messageText = `${messageText}\n${fileUrls}`;
+    }
 
+    // Create a new message with the modified text
+    const message: Message = {
+      id: generateUUID(),
+      role: 'user',
+      content: messageText,
+      createdAt: new Date(),
+    };
+
+    // Append the message directly instead of using setInput and handleSubmit
+    append(message);
+
+    // Clear input and attachments
+    setInput('');
     setAttachments([]);
     setLocalStorageInput('');
     resetHeight();
@@ -133,11 +149,13 @@ function PureMultimodalInput({
     }
   }, [
     attachments,
-    handleSubmit,
+    append,
     setAttachments,
     setLocalStorageInput,
+    setInput,
     width,
     chatId,
+    input,
   ]);
 
   const uploadFile = async (file: File) => {
@@ -196,62 +214,49 @@ function PureMultimodalInput({
   return (
     <div className="relative w-full flex flex-col gap-4">
       {messages.length === 0 &&
-        attachments.length === 0 &&
-        uploadQueue.length === 0 && (
-          <SuggestedActions append={append} chatId={chatId} />
+        !isLoading &&
+        !attachments.length && (
+          <SuggestedActions
+            chatId={chatId}
+            append={append}
+          />
         )}
 
-      <input
-        type="file"
-        className="fixed -top-4 -left-4 size-0.5 opacity-0 pointer-events-none"
-        ref={fileInputRef}
-        multiple
-        onChange={handleFileChange}
-        tabIndex={-1}
-      />
-
-      {(attachments.length > 0 || uploadQueue.length > 0) && (
-        <div className="flex flex-row gap-2 overflow-x-scroll items-end">
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
           {attachments.map((attachment) => (
-            <PreviewAttachment key={attachment.url} attachment={attachment} />
-          ))}
-
-          {uploadQueue.map((filename) => (
             <PreviewAttachment
-              key={filename}
-              attachment={{
-                url: '',
-                name: filename,
-                contentType: '',
-              }}
-              isUploading={true}
+              key={attachment.url}
+              attachment={attachment}
             />
           ))}
         </div>
       )}
 
-      <Textarea
-        ref={textareaRef}
-        placeholder="Send a message..."
-        value={input}
-        onChange={handleInput}
-        className={cx(
-          'min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-2xl !text-base bg-muted pb-10 dark:border-zinc-700',
-          className,
-        )}
-        rows={2}
-        autoFocus
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-
-            if (isLoading) {
-              toast.error('Please wait for the model to finish its response!');
-            } else {
+      <div className="relative flex flex-col gap-2">
+        <Textarea
+          ref={textareaRef}
+          value={input}
+          onChange={handleInput}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
               submitForm();
             }
-          }
-        }}
+          }}
+          placeholder="Type a message..."
+          className="min-h-[98px] w-full resize-none rounded-2xl border bg-background px-4 py-3 focus-within:outline-none focus-within:ring-2 focus-within:ring-ring dark:border-zinc-800"
+          disabled={isLoading}
+        />
+      </div>
+
+      <input
+        type="file"
+        className="hidden"
+        ref={fileInputRef}
+        multiple
+        onChange={handleFileChange}
+        accept=".pdf"
       />
 
       <div className="absolute bottom-0 p-2 w-fit flex flex-row justify-start">
